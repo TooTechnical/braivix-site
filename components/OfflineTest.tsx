@@ -11,7 +11,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * "Run Offline Test" request form.
- * Posts to /api/lead (app/api/lead/route.ts), which forwards to the backend.
+ * Posts to /api/lead; the server sends one notification to both team inboxes.
  */
 export default function OfflineTest() {
   const [values, setValues] = useState<Fields>(EMPTY);
@@ -40,13 +40,6 @@ export default function OfflineTest() {
 
     // honeypot: real people never fill the hidden "website" field
     const website = (new FormData(e.currentTarget).get("website") as string) || "";
-
-    // Static preview build (no server): pretend it worked so the flow can be reviewed.
-    if (process.env.NEXT_PUBLIC_FORM_MODE === "demo") {
-      await new Promise((r) => setTimeout(r, 700));
-      setStatus("sent");
-      return;
-    }
 
     try {
       const res = await fetch("/api/lead", {
@@ -103,7 +96,7 @@ export default function OfflineTest() {
           {status === "sent" ? (
             <div role="status" className="rounded-2xl border border-teal/30 bg-white/[0.03] px-8 py-12 text-center">
               <p className="text-2xl font-light text-snow">Thank you — request received.</p>
-              <p className="muted mt-3">We’ll be in touch shortly to arrange the test.</p>
+              <p className="muted mt-3">The team will review your request and contact you about the test.</p>
             </div>
           ) : (
             <form onSubmit={onSubmit} noValidate className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
@@ -121,7 +114,7 @@ export default function OfflineTest() {
                 </button>
                 {status === "error" && (
                   <p role="alert" className="text-sm text-alert">
-                    Something went wrong. Please try again or write to m.smirnova@braivix.com.
+                    We could not send your request. Please email m.smirnova@braivix.com or d.malone@braivix.com directly.
                   </p>
                 )}
                 <p className="muted max-w-md text-center text-xs leading-relaxed">

@@ -1,54 +1,76 @@
-# BrAIvix website — page 1 (Product / Home)
+# BrAIvix public website
 
-Next.js 16 (App Router) + TypeScript + Tailwind CSS v4. No animation libraries: all motion is CSS
-plus two small client components (scroll reveal, pipeline progress). Respects `prefers-reduced-motion`.
+Next.js 16 App Router, TypeScript, React and Tailwind CSS v4. Uses existing BrAIvix dark teal design tokens and reduced-motion-aware CSS effects.
 
-## Run
+## Local setup
+
+1. Open the branch `feat/site-pages-and-lead-email` (or review draft PR #1).
+2. In VS Code Terminal (from the repo root):
 
 ```bash
-npm install
-cp .env.example .env.local   # set LEAD_WEBHOOK_URL (see below)
-npm run dev                  # http://localhost:3000
+npm ci
+test -f .env.local || cp .env.example .env.local
 ```
 
-Deploys to Vercel as-is (framework preset: Next.js). Set the env vars in the Vercel project.
+3. Edit `.env.local`. Set `HOSTINGER_SMTP_USER` to one **existing Hostinger mailbox**, such as `d.malone@braivix.com`, and `HOSTINGER_SMTP_PASS` to **that mailbox's password**. The password must stay in `.env.local` or Vercel Environment Variables—never commit it, print it, or share it in chat.
+4. Start the site: `npm run dev`. Open http://localhost:3000.
 
-## Structure
+Page routes: /, /solutions, /security, /company, /contact, /cookies, /terms, /privacy.
 
-```
-app/
-  layout.tsx          fonts (DM Sans, self-hosted via @fontsource), metadata, ambient background
-  page.tsx            Home = Header + Hero + Pipeline + Control + OfflineTest + Footer
-  globals.css         design tokens (from the Figma style sheet) + all visual effects
-  api/lead/route.ts   receives the "Run Offline Test" form and forwards it to the backend
-components/
-  Header.tsx          fixed nav, blur on scroll, mobile menu
-  Hero.tsx            H1 + glowing orb with a flare orbiting its rim
-  Pipeline.tsx        4 steps on a timeline; a light travels down it with scroll
-  Control.tsx         "No Black Boxes" — two intersecting orbs that slide together
-  OfflineTest.tsx     horizon + flare, request form (name, bank, position, work email)
-  Footer.tsx, Logo.tsx, Reveal.tsx, nav.ts
-docs/
-  fastapi_lead_endpoint.py   example endpoint for the form (suggestion only)
-public/
-  logo-mark.png       TEMPORARY raster crop — please replace with the original SVG from Figma
-```
+## Hostinger SMTP delivery
 
-## The form
+Both public forms use POST /api/lead and Nodemailer with Hostinger's official SMTP settings:
 
-Browser → `POST /api/lead` (Next route handler) → `POST LEAD_WEBHOOK_URL` (FastAPI).
-The route validates input, drops bots via a honeypot field, and sends JSON:
+- Host: `smtp.hostinger.com`
+- Port: `465`
+- Security: `SSL/TLS` from connection start (no insecure fallback)
+- SMTP login: full email address from `HOSTINGER_SMTP_USER`
+- SMTP password: `HOSTINGER_SMTP_PASS`
+- From: authenticated mailbox (e.g. BrAIvix Website <d.malone@braivix.com>)
+- To: **both** m.smirnova@braivix.com and d.malone@braivix.com
+- Reply-To: the visitor's validated email
 
-```json
-{ "name": "", "bank": "", "role": "", "email": "", "source": "offline-test",
-  "page": "/", "submitted_at": "ISO-8601", "user_agent": "" }
+This **does not alter either Hostinger mailbox**. Do not change the domain's MX records. If necessary Hostinger documents STARTTLS on port 587 as a fallback, but the application intentionally uses the standard SSL/TLS 465 setting.
+
+SMTP acceptance is not proof of final inbox delivery. The application confirms that Hostinger accepted **both** recipients, but you must verify both inboxes, spam folders, replies, and sending restrictions.
+
+## Test locally
+
+```bash
+npm run typecheck
+npm run build
+npm run dev
 ```
 
-with header `X-Lead-Token: $LEAD_WEBHOOK_TOKEN` if set. If `LEAD_WEBHOOK_URL` is missing the route
-returns 503 and the visitor sees an error, so a lead is never silently lost.
+In a **second** terminal, test page routing and invalid-form rejection (no real email is sent):
 
-## Not done yet
+```bash
+npm run smoke
+```
 
-- Pages Solutions, Security, Company (nav links already point to /solutions, /security, /company).
-- Policy pages (/cookies, /terms, /privacy) — linked from the footer and the form.
-- Logo SVG (see above), favicon set, Open Graph image.
+To test authentication **without sending** (from the repo root, Node 22 or later):
+
+```bash
+npm run smtp:verify
+```
+
+Then use the Contact page and the homepage's Offline Test form with safe, fabricated test details. Check **both recipients** and the Reply-To value. Confirm that removing the password makes forms show an error, not false success. Run tests on a Vercel Preview deployment as well, since production egress and TLS may differ from your Mac.
+
+## Vercel setup
+
+Open the BrAIvix site's Vercel project → Settings → Environment Variables. Add **server-only** `HOSTINGER_SMTP_USER` and `HOSTINGER_SMTP_PASS`. Set these for Preview, and for Production only when approved. Redeploy to apply changes. Do not add the `NEXT_PUBLIC_` prefix or put secrets in the GitHub repository.
+
+Vercel supports outbound SMTP except port 25. A serverless function must await `sendMail`; the API route does. SMTP may be slower and Hostinger mailbox sending limits still apply.
+
+## Reliability and safety
+
+- Both forms require essential business information, reject invalid data and limit input lengths and body size.
+- SMTP errors return HTTP 502; missing credentials return HTTP 503. Fake success demo mode was removed.
+- One short-lived TLS connection per message, fixed internal recipients, fixed sender from SMTP login, visitor as Reply-To. No sensitive request bodies or SMTP passwords in application logs.
+- Existing optional `LEAD_WEBHOOK_URL` can forward a lead to a **storage-only** backend after Hostinger accepts email. Disable any duplicate notifications at that backend.
+- A basic honeypot exists, but **add durable rate limiting and CAPTCHA/Turnstile before public launch** (in-memory counters are not reliable for serverless functions). Configure alerts/monitoring for failed requests, plus mailbox quotas and anti-spam policies.
+- Be aware that a timeout or partial SMTP acceptance can result in duplicate or missing notifications on retry. For bank-grade reliability, use a persistent lead store / retry queue before accepting production leads.
+- The legal pages are drafts and need review against actual company policies, processors, retention periods, international transfers and live cookies.
+- Do not submit confidential bank customer data using the public contact form. BrAIvix must verify all security/product claims before launch.
+
+Do not merge the draft PR or deploy the website to production until tests, email delivery and content/legal review are complete.
