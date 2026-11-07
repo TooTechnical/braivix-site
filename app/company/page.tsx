@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import ContentPage from "@/components/ContentPage";
 
 export const metadata: Metadata = {
@@ -9,8 +8,7 @@ export const metadata: Metadata = {
 
 export default function CompanyPage() {
   return (
-    <>
-      <ContentPage
+    <ContentPage
         eyebrow="Company"
         title="Infrastructure for"
         accent="better decisions."
@@ -22,8 +20,6 @@ export default function CompanyPage() {
           { title: "Work with us", paragraphs: ["We welcome conversations with banks, financial institutions and potential distribution partners who are interested in carefully scoped product evaluations."] },
         ]}
         showCta
-      />
-      <span className="sr-only"><Link href="/contact">Contact BrAIvix</Link></span>
-    </>
+    />
   );
 }

@@ -4,14 +4,14 @@ Next.js App Router, TypeScript, React and Tailwind CSS v4. Uses the existing BrA
 
 ## Run locally
 
-Requires Node.js 22+ (or the version required by the installed Next.js release).
+Requires Node.js 20.9+ (Node.js 22 LTS recommended).
 
-\`\`\`bash
+```bash
 npm ci
 cp .env.example .env.local
 npm run dev
 # http://localhost:3000
-\`\`\`
+```
 
 Open /, /solutions, /security, /company, /contact, /cookies, /terms and /privacy.
 
@@ -35,12 +35,12 @@ Basic honeypot and input limits are included. Before launching publicly, add inf
 
 ## Build and smoke test
 
-\`\`\`bash
+```bash
 npm run build
 npm run dev
 # in a second terminal while running:
 npm run smoke
-\`\`\`
+```
 
 A smoke test checks that all eight page routes return HTTP 200 and malformed form data is rejected. It does not send real mail.
 

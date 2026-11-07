@@ -30,6 +30,7 @@ export default function Footer() {
         </FooterCol>
 
         <FooterCol title="Contact">
+          <Link href="/contact" className="text-mist hover:text-white">Contact us</Link>
           {CONTACTS.map((c) => (
             <a key={c} href={`mailto:${c}`} className="hover:text-white">
               {c}
