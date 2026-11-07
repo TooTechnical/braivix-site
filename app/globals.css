@@ -1,0 +1,400 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   BrAIvix design tokens (taken from the Figma style sheet)
+   ------------------------------------------------------------------ */
+@theme {
+  --font-sans: "DM Sans Variable", "DM Sans", system-ui, sans-serif;
+
+  --color-ink: #040b0d;          /* page background */
+  --color-ink-2: #08161a;        /* raised surfaces */
+  --color-teal-deep: #1e4a50;    /* Primary Dark */
+  --color-teal: #8ec3cc;         /* Primary Middle */
+  --color-mist: #dce8e8;         /* Primary Light */
+  --color-snow: #f4f7f7;         /* White */
+  --color-alert: #d9737b;        /* System */
+}
+
+:root {
+  --text-muted: rgba(220, 232, 232, 0.62);
+  --line: rgba(142, 195, 204, 0.22);
+  --line-strong: rgba(142, 195, 204, 0.55);
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--color-ink);
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-snow);
+  font-family: var(--font-sans);
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(142, 195, 204, 0.35);
+}
+
+/* ------------------------------------------------------------------
+   Ambient background: slow drifting teal haze behind everything
+   ------------------------------------------------------------------ */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ambient::before,
+.ambient::after {
+  content: "";
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.55;
+}
+.ambient::before {
+  left: -30vmax;
+  top: 10vh;
+  background: radial-gradient(circle, rgba(30, 74, 80, 0.55), transparent 65%);
+  animation: drift-a 28s ease-in-out infinite alternate;
+}
+.ambient::after {
+  right: -32vmax;
+  top: 40vh;
+  background: radial-gradient(circle, rgba(30, 74, 80, 0.45), transparent 65%);
+  animation: drift-b 34s ease-in-out infinite alternate;
+}
+@keyframes drift-a {
+  to { transform: translate(8vw, 20vh) scale(1.1); }
+}
+@keyframes drift-b {
+  to { transform: translate(-10vw, -15vh) scale(0.95); }
+}
+
+/* ------------------------------------------------------------------
+   Orb (glowing sphere) + flare (bright star)
+   ------------------------------------------------------------------ */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 72%, rgba(220, 232, 232, 0.22), transparent 38%),
+    radial-gradient(circle at 50% 50%, rgba(30, 74, 80, 0.28), rgba(8, 22, 26, 0.15) 62%, transparent 72%);
+  box-shadow:
+    inset 0 0 90px rgba(142, 195, 204, 0.18),
+    inset 18px -26px 70px rgba(220, 232, 232, 0.1),
+    0 0 120px rgba(142, 195, 204, 0.08);
+  border: 1px solid rgba(142, 195, 204, 0.28);
+}
+
+.flare {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.flare::before {
+  /* glowing core */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #ffffff 0%,
+    rgba(255, 255, 255, 0.85) 6%,
+    rgba(220, 232, 232, 0.35) 16%,
+    rgba(142, 195, 204, 0.12) 34%,
+    transparent 60%
+  );
+  animation: pulse 5s ease-in-out infinite;
+}
+.flare::after {
+  /* thin cross rays */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 360%;
+  height: 360%;
+  transform: translate(-50%, -50%);
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent) center / 100% 1.5px no-repeat,
+    linear-gradient(0deg, transparent, rgba(255, 255, 255, 0.75), transparent) center / 1.5px 70% no-repeat;
+  mask-image: radial-gradient(circle, #000 0%, transparent 55%);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 55%);
+  animation: pulse 5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.85; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+}
+.flare::before { animation-name: pulse-core; }
+@keyframes pulse-core {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* flare without the vertical ray (used above text) */
+.flare.flare--flat::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent) center / 100% 1.5px no-repeat;
+}
+
+/* the flare travels around the hero orb's rim */
+.orbit {
+  position: absolute;
+  inset: 0;
+  animation: orbit 46s linear infinite;
+}
+@keyframes orbit {
+  to { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------------------------------
+   Light beam (vertical shaft of light, as between the designer's columns)
+   ------------------------------------------------------------------ */
+.beam {
+  position: absolute;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(220, 232, 232, 0.9), transparent);
+  box-shadow: 0 0 18px 4px rgba(142, 195, 204, 0.35);
+}
+
+/* ------------------------------------------------------------------
+   Horizon (planet edge with a flare) for the closing section
+   ------------------------------------------------------------------ */
+.horizon {
+  position: absolute;
+  left: 50%;
+  width: 170vw;
+  max-width: 2400px;
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 0%, rgba(30, 74, 80, 0.35), var(--color-ink) 40%);
+  border-top: 1px solid rgba(220, 232, 232, 0.55);
+  box-shadow:
+    0 -2px 30px rgba(142, 195, 204, 0.35),
+    0 -40px 140px rgba(142, 195, 204, 0.12);
+}
+
+/* ------------------------------------------------------------------
+   Buttons, links, inputs
+   ------------------------------------------------------------------ */
+.btn-line {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 0.25rem;
+  font-weight: 400;
+  color: var(--color-mist);
+  letter-spacing: 0.01em;
+  transition: color 0.3s ease;
+}
+.btn-line::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--line-strong);
+  transform-origin: left;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+.btn-line:hover {
+  color: #fff;
+}
+.btn-line:hover::after {
+  background: var(--color-mist);
+  box-shadow: 0 0 12px rgba(142, 195, 204, 0.8);
+}
+
+.btn-solid {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  border-radius: 999px;
+  padding: 0.9rem 1.8rem;
+  font-weight: 400;
+  color: var(--color-ink);
+  background: linear-gradient(180deg, var(--color-mist), var(--color-teal));
+  box-shadow: 0 0 0 1px rgba(220, 232, 232, 0.4), 0 10px 40px -10px rgba(142, 195, 204, 0.6);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.btn-solid:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(220, 232, 232, 0.7), 0 14px 50px -8px rgba(142, 195, 204, 0.85);
+}
+.btn-solid:disabled {
+  opacity: 0.6;
+  cursor: progress;
+  transform: none;
+}
+
+.field {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  padding: 0.9rem 0.25rem;
+  color: var(--color-snow);
+  font-size: 1rem;
+  font-weight: 300;
+  outline: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.field::placeholder {
+  color: rgba(220, 232, 232, 0.45);
+}
+.field:focus {
+  border-bottom-color: var(--color-mist);
+  box-shadow: 0 1px 0 0 var(--color-mist), 0 10px 20px -16px rgba(142, 195, 204, 0.9);
+}
+.field[aria-invalid="true"] {
+  border-bottom-color: var(--color-alert);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------
+   Scroll reveal (see components/Reveal.tsx)
+   ------------------------------------------------------------------ */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  filter: blur(6px);
+  transition:
+    opacity 1s cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 1s cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter 1s ease;
+  transition-delay: var(--delay, 0ms);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+/* ------------------------------------------------------------------
+   Pipeline timeline
+   ------------------------------------------------------------------ */
+.timeline-track {
+  position: absolute;
+  left: 11px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.timeline-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: calc(var(--progress, 0) * 100%);
+  background: linear-gradient(180deg, rgba(142, 195, 204, 0.1), var(--color-mist));
+}
+.timeline-spark {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--progress, 0) * 100%);
+  width: 90px;
+  height: 90px;
+}
+.step-node {
+  position: absolute;
+  left: 0;
+  top: 0.35rem;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--color-ink);
+  transition: all 0.6s ease;
+}
+.step-node::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--color-teal-deep);
+  transition: all 0.6s ease;
+}
+.step.is-active .step-node {
+  border-color: var(--color-mist);
+  box-shadow: 0 0 22px rgba(142, 195, 204, 0.7);
+}
+.step.is-active .step-node::after {
+  background: #fff;
+}
+.step .step-body {
+  opacity: 0.45;
+  transition: opacity 0.8s ease;
+}
+.step.is-active .step-body {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------
+   "No Black Boxes" — two intersecting circles
+   ------------------------------------------------------------------ */
+.venn-circle {
+  transition: transform 1.6s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 1.2s ease;
+}
+.venn:not(.is-visible) .venn-left {
+  transform: translateX(-18%);
+  opacity: 0.4;
+}
+.venn:not(.is-visible) .venn-right {
+  transform: translateX(18%);
+  opacity: 0.4;
+}
+.venn-star {
+  opacity: 0;
+  transition: opacity 1.2s ease 1s;
+}
+.venn.is-visible .venn-star {
+  opacity: 1;
+}
+@media (max-width: 767px) {
+  .venn:not(.is-visible) .venn-left { transform: translateY(-14%); }
+  .venn:not(.is-visible) .venn-right { transform: translateY(14%); }
+}
+
+/* ------------------------------------------------------------------
+   Respect users who turn animations off
+   ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+@keyframes scrollcue {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(200%); }
+}
