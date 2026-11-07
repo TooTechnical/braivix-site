@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
+import nodemailer from "nodemailer";
 
 export const runtime = "nodejs";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RECIPIENTS = ["m.smirnova@braivix.com", "d.malone@braivix.com"] as const;
-const clean = (value: unknown) => typeof value === "string" ? value.trim().replace(/[\r\n]+/g, " ") : "";
+
+const clean = (value: unknown) =>
+  typeof value === "string" ? value.trim().replace(/[\r\n]+/g, " ") : "";
 const fail = (error: string, status: number) =>
-  NextResponse.json({ ok: false, error }, { status, headers: { "Cache-Control": "no-store" } });
+  NextResponse.json(
+    { ok: false, error },
+    { status, headers: { "Cache-Control": "no-store" } },
+  );
 
 type Lead = {
   source: "contact" | "offline-test";
@@ -28,14 +34,21 @@ export async function POST(request: Request) {
     const raw = await request.text();
     if (raw.length > 6000) return fail("payload_too_large", 413);
     const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fail("invalid_json", 400);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return fail("invalid_json", 400);
+    }
     data = parsed as Record<string, unknown>;
   } catch {
     return fail("invalid_json", 400);
   }
 
-  // Honeypot: do not notify the team about obvious automated submissions.
-  if (clean(data.website)) return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  // Standard honeypot: do not notify the team about obvious bot submissions.
+  if (clean(data.website)) {
+    return NextResponse.json(
+      { ok: true },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   const source: Lead["source"] = data.source === "contact" ? "contact" : "offline-test";
   const lead: Lead = {
@@ -55,15 +68,33 @@ export async function POST(request: Request) {
     lead.email.length > 254 || !EMAIL_RE.test(lead.email) ||
     (source === "offline-test" && (lead.role.length < 1 || lead.role.length > 120)) ||
     (source === "contact" && (lead.message.length < 1 || lead.message.length > 2000))
-  ) return fail("validation", 422);
+  ) {
+    return fail("validation", 422);
+  }
 
-  // Do not falsely confirm a submission when no email provider is configured.
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.LEAD_FROM_EMAIL;
-  if (!apiKey || !from) {
-    console.error("[lead] Email delivery is not configured");
+  // Keep the SMTP mailbox password on the server, never in the frontend.
+  const user = process.env.HOSTINGER_SMTP_USER?.trim();
+  const password = process.env.HOSTINGER_SMTP_PASS;
+  if (!user || !EMAIL_RE.test(user) || !password) {
+    console.error("[lead] Hostinger SMTP credentials are not configured");
     return fail("not_configured", 503);
   }
+
+  // Hostinger Email: SSL/TLS on 465. Each request uses a short-lived connection
+  // instead of leaving a pooled SMTP connection open in a serverless function.
+  const transport = nodemailer.createTransport({
+    host: "smtp.hostinger.com",
+    port: 465,
+    secure: true,
+    auth: { user, pass: password },
+    connectionTimeout: 10000,
+    greetingTimeout: 7000,
+    socketTimeout: 12000,
+    disableFileAccess: true,
+    disableUrlAccess: true,
+    maxRecipients: 2,
+    tls: { minVersion: "TLSv1.2", rejectUnauthorized: true },
+  });
 
   const kind = source === "contact" ? "General contact" : "Offline test request";
   const lines = [
@@ -80,53 +111,55 @@ export async function POST(request: Request) {
   ];
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + apiKey,
-        "Content-Type": "application/json",
-        "Idempotency-Key": crypto.randomUUID(),
-      },
-      body: JSON.stringify({
-        from,
-        to: [...RECIPIENTS],
-        reply_to: lead.email,
-        subject: "BrAIvix website: " + kind,
-        text: lines.join("\n"),
-      }),
-      signal: AbortSignal.timeout(10000),
-      cache: "no-store",
+    // IMPORTANT: await the SMTP send before returning from a Vercel function.
+    const result = await transport.sendMail({
+      from: { name: "BrAIvix Website", address: user },
+      to: [...RECIPIENTS],
+      replyTo: { name: lead.name, address: lead.email },
+      subject: "BrAIvix website: " + kind,
+      text: lines.join("\n"),
     });
-    if (!response.ok) {
-      console.error("[lead] Email provider rejected submission; HTTP", response.status);
-      return fail("delivery_failed", 502);
+
+    // SMTP acknowledgement indicates the provider accepted responsibility for
+    // these recipients. It cannot guarantee final mailbox delivery.
+    const accepted = new Set(result.accepted.map((email) => email.toLowerCase()));
+    if (!RECIPIENTS.every((recipient) => accepted.has(recipient))) {
+      console.error("[lead] SMTP server did not accept both recipients");
+      return fail("partial_delivery", 502);
     }
 
-    // Optional CRM lead forwarding; intentionally non-blocking after email is accepted.
-    // Configure the webhook as storage-only to avoid duplicate email notifications.
+    // Optional CRM/backend lead storage. Disable duplicate mail sending there.
     if (process.env.LEAD_WEBHOOK_URL) {
       try {
-        const result = await fetch(process.env.LEAD_WEBHOOK_URL, {
+        const webhook = await fetch(process.env.LEAD_WEBHOOK_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(process.env.LEAD_WEBHOOK_TOKEN ? { "X-Lead-Token": process.env.LEAD_WEBHOOK_TOKEN } : {}),
+            ...(process.env.LEAD_WEBHOOK_TOKEN
+              ? { "X-Lead-Token": process.env.LEAD_WEBHOOK_TOKEN }
+              : {}),
           },
           body: JSON.stringify(lead),
           signal: AbortSignal.timeout(5000),
           cache: "no-store",
         });
-        if (!result.ok) console.error("[lead] Optional CRM webhook failed; HTTP", result.status);
+        if (!webhook.ok) {
+          console.error("[lead] Optional CRM webhook rejected request, HTTP", webhook.status);
+        }
       } catch {
         console.error("[lead] Optional CRM webhook unavailable");
       }
     }
 
-    // The provider accepted the message, but inbox delivery must be verified separately.
-    return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      { ok: true },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch {
-    // Avoid writing personal data, email bodies or API keys into logs.
-    console.error("[lead] Email provider unavailable");
+    // Do not log the password, customer's information, or full SMTP exception.
+    console.error("[lead] SMTP sending failed; verify Hostinger login and connectivity");
     return fail("delivery_failed", 502);
+  } finally {
+    transport.close();
   }
 }

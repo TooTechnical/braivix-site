@@ -1,57 +1,76 @@
 # BrAIvix public website
 
-Next.js App Router, TypeScript, React and Tailwind CSS v4. Uses the existing BrAIvix design tokens, DM Sans font and lightweight CSS animations. Motion respects prefers-reduced-motion.
+Next.js 16 App Router, TypeScript, React and Tailwind CSS v4. Uses existing BrAIvix dark teal design tokens and reduced-motion-aware CSS effects.
 
-## Run locally
+## Local setup
 
-Requires Node.js 20.9+ (Node.js 22 LTS recommended).
+1. Open the branch `feat/site-pages-and-lead-email` (or review draft PR #1).
+2. In VS Code Terminal (from the repo root):
 
 ```bash
 npm ci
-cp .env.example .env.local
-npm run dev
-# http://localhost:3000
+test -f .env.local || cp .env.example .env.local
 ```
 
-Open /, /solutions, /security, /company, /contact, /cookies, /terms and /privacy.
+3. Edit `.env.local`. Set `HOSTINGER_SMTP_USER` to one **existing Hostinger mailbox**, such as `d.malone@braivix.com`, and `HOSTINGER_SMTP_PASS` to **that mailbox's password**. The password must stay in `.env.local` or Vercel Environment Variables—never commit it, print it, or share it in chat.
+4. Start the site: `npm run dev`. Open http://localhost:3000.
 
-## Contact forms and delivery
+Page routes: /, /solutions, /security, /company, /contact, /cookies, /terms, /privacy.
 
-The home page "Run Offline Test" form and the /contact form both POST to the server-only /api/lead route.
+## Hostinger SMTP delivery
 
-**Email delivery is NOT active until configured.** The server requires RESEND_API_KEY and LEAD_FROM_EMAIL. Use a verified sending domain in Resend (e.g. braivix.com) with SPF/DKIM configured as requested by the provider. Both forms send a **single message to both**:
-- m.smirnova@braivix.com
-- d.malone@braivix.com
+Both public forms use POST /api/lead and Nodemailer with Hostinger's official SMTP settings:
 
-The sender should be a verified address (e.g. BrAIvix <leads@braivix.com>), while the visitor's address is set as Reply-To. Do not add a user-provided address as the From address.
+- Host: `smtp.hostinger.com`
+- Port: `465`
+- Security: `SSL/TLS` from connection start (no insecure fallback)
+- SMTP login: full email address from `HOSTINGER_SMTP_USER`
+- SMTP password: `HOSTINGER_SMTP_PASS`
+- From: authenticated mailbox (e.g. BrAIvix Website <d.malone@braivix.com>)
+- To: **both** m.smirnova@braivix.com and d.malone@braivix.com
+- Reply-To: the visitor's validated email
 
-For Vercel, add the two environment variables in Project Settings > Environment Variables, separately for Preview and Production where applicable. Redeploy after changing secrets. Do not commit .env.local.
+This **does not alter either Hostinger mailbox**. Do not change the domain's MX records. If necessary Hostinger documents STARTTLS on port 587 as a fallback, but the application intentionally uses the standard SSL/TLS 465 setting.
 
-The route returns 503 if email credentials are absent, 422 on validation errors and 502 if the provider does not accept the message. It never displays success merely because demo mode is enabled. Provider acceptance is not the same as final inbox delivery: verify real delivery to **both** inboxes, check spam, test replies and monitor bounce events.
+SMTP acceptance is not proof of final inbox delivery. The application confirms that Hostinger accepted **both** recipients, but you must verify both inboxes, spam folders, replies, and sending restrictions.
 
-LEAD_WEBHOOK_URL and LEAD_WEBHOOK_TOKEN are optional; when present they forward the validated lead to your CRM/backend after email acceptance. Make any backend handler storage-only to avoid duplicate emails.
-
-Basic honeypot and input limits are included. Before launching publicly, add infrastructure-level rate limiting and bot protection (e.g. Turnstile) and monitor email abuse and delivery. Never submit actual customer financial records using the public enquiry form.
-
-## Build and smoke test
+## Test locally
 
 ```bash
+npm run typecheck
 npm run build
 npm run dev
-# in a second terminal while running:
+```
+
+In a **second** terminal, test page routing and invalid-form rejection (no real email is sent):
+
+```bash
 npm run smoke
 ```
 
-A smoke test checks that all eight page routes return HTTP 200 and malformed form data is rejected. It does not send real mail.
+To test authentication **without sending** (from the repo root, Node 22 or later):
 
-## Launch checks
+```bash
+npm run smtp:verify
+```
 
-- Have Mariia approve content, product claims and company details.
-- Obtain legal review of privacy, cookies and terms drafts; confirm processor list, retention and transfer arrangements.
-- Audit cookies and third-party scripts on the **deployed** domain. Only add a consent banner if actual non-essential technologies are present; then block them before consent and provide withdrawal.
-- Check accessibility, keyboard navigation, mobile layout and reduced-motion behavior.
-- Configure email sender authentication, verify messages arrive at both recipients, and check provider acceptance and bounce status.
-- Add independent spam/rate-limit controls and verify no personal data enters logs.
-- Run npm run build and manual end-to-end tests on a Vercel preview before production deployment.
+Then use the Contact page and the homepage's Offline Test form with safe, fabricated test details. Check **both recipients** and the Reply-To value. Confirm that removing the password makes forms show an error, not false success. Run tests on a Vercel Preview deployment as well, since production egress and TLS may differ from your Mac.
 
-No SOC 2 or ISO 27001 certification is claimed by this website.
+## Vercel setup
+
+Open the BrAIvix site's Vercel project → Settings → Environment Variables. Add **server-only** `HOSTINGER_SMTP_USER` and `HOSTINGER_SMTP_PASS`. Set these for Preview, and for Production only when approved. Redeploy to apply changes. Do not add the `NEXT_PUBLIC_` prefix or put secrets in the GitHub repository.
+
+Vercel supports outbound SMTP except port 25. A serverless function must await `sendMail`; the API route does. SMTP may be slower and Hostinger mailbox sending limits still apply.
+
+## Reliability and safety
+
+- Both forms require essential business information, reject invalid data and limit input lengths and body size.
+- SMTP errors return HTTP 502; missing credentials return HTTP 503. Fake success demo mode was removed.
+- One short-lived TLS connection per message, fixed internal recipients, fixed sender from SMTP login, visitor as Reply-To. No sensitive request bodies or SMTP passwords in application logs.
+- Existing optional `LEAD_WEBHOOK_URL` can forward a lead to a **storage-only** backend after Hostinger accepts email. Disable any duplicate notifications at that backend.
+- A basic honeypot exists, but **add durable rate limiting and CAPTCHA/Turnstile before public launch** (in-memory counters are not reliable for serverless functions). Configure alerts/monitoring for failed requests, plus mailbox quotas and anti-spam policies.
+- Be aware that a timeout or partial SMTP acceptance can result in duplicate or missing notifications on retry. For bank-grade reliability, use a persistent lead store / retry queue before accepting production leads.
+- The legal pages are drafts and need review against actual company policies, processors, retention periods, international transfers and live cookies.
+- Do not submit confidential bank customer data using the public contact form. BrAIvix must verify all security/product claims before launch.
+
+Do not merge the draft PR or deploy the website to production until tests, email delivery and content/legal review are complete.
